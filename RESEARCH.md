@@ -1,6 +1,6 @@
 # Research notes — what made this worth building
 
-Development Experiment 058 of [dev-experiments-365](https://github.com/freyesperales/dev-experiments-365).
+Development Experiment 059 of [dev-experiments-365](https://github.com/freyesperales/dev-experiments-365).
 Swept on 2026-10-01. These are the raw signals, including the four candidate
 ideas that got killed, because the kills are the part that decided the build.
 
@@ -169,12 +169,12 @@ Not for novelty. Three reasons specific to this problem:
 
 ## What the series has not done before
 
-Checked against all 57 prior entries. Experiments 001–044 audit the MCP/agent
-ecosystem; 045–057 move through CI, spreadsheets, i18n, e-invoicing, energy,
+Checked against all 58 prior entries. Experiments 001–044 audit the MCP/agent
+ecosystem; 045–058 move through CI, spreadsheets, i18n, e-invoicing, energy,
 accessibility, transit, regulatory deadlines, cartonisation, binary formats,
-subtitles and tz databases. Every one of the last ten is the same shape: an
-offline pure-stdlib **Python CLI** that reads an artefact and emits findings
-with CI exit codes.
+subtitles, tz databases and spaced repetition. Every one of the last ten is the
+same shape: an offline pure-stdlib **Python CLI** that reads an artefact and
+emits findings with CI exit codes.
 
 lectern is the series' first **browser application**, its first **JavaScript**
 deliverable, its first tool with a **designed interface** rather than a text
