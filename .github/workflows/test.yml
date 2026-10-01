@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No install step: lectern has no dependencies.
+      - name: Run the test suite
+        run: node --test test/
+
+      - name: Check the committed demo bundle is in sync with demo/
+        run: |
+          node tools/bundle-demo.js
+          git diff --exit-code -- demo-data.js
+
+      # The demo codebase is a real program, so prove it compiles and runs.
+      - name: Build and run the demo C program
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -O2 -o /tmp/jsonfmt \
+            demo/arena.c demo/json.c demo/main.c
+          echo '{"name":"lectern","tags":["c","reading"],"n":[1,2.5,-3e2],"ok":true,"nil":null}' \
+            | /tmp/jsonfmt
+          printf '{"bad":}' | /tmp/jsonfmt && exit 1 || echo "rejected bad input as expected"

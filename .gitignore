@@ -1,0 +1,19 @@
+# lectern has no build step and no dependencies; this list is for stray local
+# artefacts only.
+
+node_modules/
+package-lock.json
+
+# compiled demo program
+jsonfmt
+jsonfmt.exe
+*.o
+*.obj
+
+# editors and OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~

@@ -1,0 +1,33 @@
+{
+  "name": "lectern",
+  "version": "1.0.0",
+  "description": "Read an unfamiliar C codebase in your browser. Expand any function call inline, as deep as you like, without losing your place.",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "main": "core.js",
+  "files": [
+    "index.html",
+    "app.js",
+    "core.js",
+    "demo-data.js"
+  ],
+  "scripts": {
+    "test": "node --test test/",
+    "bundle": "node tools/bundle-demo.js",
+    "serve": "node tools/serve.js"
+  },
+  "keywords": [
+    "c",
+    "code-reading",
+    "call-graph",
+    "code-navigation",
+    "static-analysis",
+    "sourcetrail",
+    "offline",
+    "zero-dependency"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

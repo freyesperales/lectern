@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lectern — read a C codebase</title>
+<meta name="description" content="Read an unfamiliar C codebase in your browser. Expand any function call inline, as deep as you like, without losing your place. Nothing is uploaded.">
+<style>
+/* ---------------------------------------------------------------------------
+   lectern — a critical edition of a codebase.
+
+   The visual model is a scholarly annotated text rather than an IDE: one
+   generously set text block, wide margins, and glosses inset into the text
+   with a ruled bar. Cool laid-paper ground, ink body, madder red for the
+   rubrication (headings and the expansion marks), woad blue for types.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --paper:        #e9ecef;
+  --leaf:         #f8f9fa;
+  --leaf-sunk:    #eef1f4;
+  --ink:          #1b2127;
+  --ink-soft:     #5d6773;
+  --ink-faint:    #8b949e;
+  --rule:         #ccd2d9;
+  --rule-soft:    #dde2e7;
+  --rubric:       #9e2b25;
+  --rubric-wash:  #f3e4e2;
+  --woad:         #2e4b7c;
+  --moss:         #4a6b3f;
+  --amber:        #8a6412;
+
+  --leading: 1.65;
+  --measure: 88ch;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono",
+          "Roboto Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --serif: Charter, "Iowan Old Style", "Palatino Linotype", Palatino,
+           "Book Antiqua", "Source Serif 4", Georgia, serif;
+
+  --t-fast: 110ms cubic-bezier(.2, .7, .3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:       #15181c;
+    --leaf:        #1b1f24;
+    --leaf-sunk:   #22272d;
+    --ink:         #d8dee5;
+    --ink-soft:    #9aa4b0;
+    --ink-faint:   #6d7783;
+    --rule:        #333a42;
+    --rule-soft:   #2a3037;
+    --rubric:      #e1685f;
+    --rubric-wash: #2e1f1e;
+    --woad:        #8fb3e8;
+    --moss:        #9ec489;
+    --amber:       #d6ab53;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: var(--leading);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+a { color: var(--rubric); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--rubric);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ============================ masthead ============================ */
+
+.masthead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: .7rem 1.1rem .6rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--leaf);
+}
+
+.wordmark {
+  font-family: var(--serif);
+  font-size: 1.22rem;
+  font-weight: 600;
+  letter-spacing: -.012em;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.wordmark .mark {
+  color: var(--rubric);
+  /* The pilcrow is the scribe's paragraph mark; here it stands for the
+     gloss, which is the one thing this tool does that others do not. */
+  font-weight: 400;
+  margin-right: .1em;
+}
+
+.tagline {
+  color: var(--ink-soft);
+  font-size: .9rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-wrap { flex: 0 0 auto; position: relative; }
+
+#search {
+  font-family: var(--mono);
+  font-size: .82rem;
+  width: 22ch;
+  padding: .34rem .6rem;
+  color: var(--ink);
+  background: var(--leaf-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+#search::placeholder { color: var(--ink-faint); }
+#search:focus { width: 32ch; border-color: var(--rubric); outline: none; }
+#search { transition: width var(--t-fast); }
+
+.results {
+  position: absolute;
+  top: calc(100% + .35rem);
+  right: 0;
+  width: min(44ch, 88vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--leaf);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .38);
+  z-index: 40;
+}
+.results[hidden] { display: none; }
+
+.result {
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  width: 100%;
+  padding: .32rem .6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.result:last-child { border-bottom: 0; }
+.result[aria-selected="true"] { background: var(--rubric-wash); }
+.result .rname { font-family: var(--mono); font-size: .82rem; }
+.result .rkind {
+  font-size: .72rem;
+  color: var(--rubric);
+  flex: 0 0 auto;
+  width: 5.2em;
+}
+.result .rwhere {
+  font-size: .75rem;
+  color: var(--ink-faint);
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--mono);
+}
+.results .empty { padding: .6rem; color: var(--ink-soft); font-size: .85rem; }
+
+/* ============================ shell ============================ */
+
+.shell {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* ---------------------------- left rail ---------------------------- */
+
+.rail {
+  border-right: 1px solid var(--rule);
+  background: var(--leaf);
+  overflow-y: auto;
+  padding: .9rem 0 3rem;
+  min-width: 0;
+}
+
+.rail section { padding: 0 .9rem; margin-bottom: 1.5rem; }
+
+.rail h2 {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 0 0 .5rem;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid var(--rule-soft);
+  letter-spacing: 0;
+}
+
+.filelist { list-style: none; margin: 0; padding: 0; }
+.filelist > li { margin-bottom: .1rem; }
+
+.filebtn {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  width: 100%;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: .79rem;
+  padding: .16rem .3rem;
+  border-radius: 2px;
+  color: var(--ink);
+}
+.filebtn:hover { background: var(--leaf-sunk); }
+.filebtn .count { margin-left: auto; color: var(--ink-faint); font-size: .72rem; }
+.filebtn[aria-expanded="true"] { color: var(--rubric); }
+
+.symlist { list-style: none; margin: .1rem 0 .45rem; padding: 0 0 0 .55rem; border-left: 1px solid var(--rule-soft); }
+.symlist[hidden] { display: none; }
+
+.symbtn {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  width: 100%;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: .775rem;
+  padding: .11rem .3rem;
+  border-radius: 2px;
+  color: var(--ink-soft);
+}
+.symbtn:hover { background: var(--leaf-sunk); color: var(--ink); }
+.symbtn[aria-current="true"] { color: var(--rubric); background: var(--rubric-wash); }
+.symbtn .glyph { flex: 0 0 auto; width: 1.1em; color: var(--ink-faint); text-align: center; }
+.symbtn[aria-current="true"] .glyph { color: var(--rubric); }
+
+.callers { list-style: none; margin: 0; padding: 0; }
+.callers li { margin-bottom: .22rem; }
+.callers button {
+  font-family: var(--mono);
+  font-size: .775rem;
+  text-align: left;
+  color: var(--ink-soft);
+  padding: .08rem .3rem;
+  border-radius: 2px;
+  width: 100%;
+  display: flex;
+  gap: .4rem;
+  align-items: baseline;
+}
+.callers button:hover { background: var(--leaf-sunk); color: var(--ink); }
+.callers .at { margin-left: auto; color: var(--ink-faint); font-size: .72rem; }
+.rail .none { color: var(--ink-faint); font-size: .82rem; margin: 0; }
+
+.loadbtn {
+  display: block;
+  width: 100%;
+  font-family: var(--serif);
+  font-size: .86rem;
+  padding: .4rem .6rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--leaf-sunk);
+  margin-bottom: .4rem;
+}
+.loadbtn:hover { border-color: var(--rubric); color: var(--rubric); }
+.rail .privacy { font-size: .78rem; color: var(--ink-faint); margin: .5rem 0 0; }
+
+/* ---------------------------- main ---------------------------- */
+
+.main { overflow-y: auto; min-width: 0; position: relative; }
+
+.viewbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+  padding: .4rem 1.4rem;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule-soft);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .viewbar { background: var(--paper); }
+}
+
+.tab {
+  font-size: .84rem;
+  padding: .22rem .62rem;
+  border-radius: 3px;
+  color: var(--ink-soft);
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--rubric); background: var(--rubric-wash); }
+
+.viewbar .spacer { flex: 1 1 auto; }
+.viewbar .hint { font-size: .78rem; color: var(--ink-faint); }
+.viewbar .hint kbd {
+  font-family: var(--mono);
+  font-size: .72rem;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 .28em;
+  color: var(--ink-soft);
+}
+
+.page { padding: 1.5rem 1.4rem 6rem; }
+.view[hidden] { display: none; }
+
+/* ---------------------------- the text block ---------------------------- */
+
+.leaf {
+  max-width: var(--measure);
+  background: var(--leaf);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.leafhead {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .6rem .95rem .55rem;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+.leafhead .where {
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--ink-faint);
+}
+.leafhead .title {
+  font-family: var(--mono);
+  font-size: .95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+.leafhead .kindtag {
+  font-size: .76rem;
+  color: var(--rubric);
+}
+.leafhead .acts { margin-left: auto; display: flex; gap: .35rem; }
+.leafhead .acts button {
+  font-size: .78rem;
+  color: var(--ink-soft);
+  padding: .12rem .45rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.leafhead .acts button:hover { color: var(--rubric); border-color: var(--rubric); }
+
+.doc {
+  padding: .5rem .95rem;
+  margin: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink-soft);
+  font-size: .92rem;
+  max-width: 72ch;
+  white-space: pre-wrap;
+}
+.doc:empty { display: none; }
+
+/* The code surface. Each gloss nests inside the previous one, so padding and
+   the rubric rule compound naturally with depth. */
+.gloss { padding: .55rem 0 .6rem; }
+
+/* One element per physical source line, so a gloss can be inset directly
+   after the line that called for it and the line numbers stay honest. */
+.lines {
+  font-family: var(--mono);
+  font-size: .815rem;
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+.ln {
+  display: grid;
+  grid-template-columns: 3.6em minmax(0, 1fr);
+  gap: .7em;
+  padding: 0 .95rem;
+}
+.ln:hover { background: color-mix(in srgb, var(--rubric-wash) 45%, transparent); }
+
+.ln > .num {
+  color: var(--ink-faint);
+  text-align: right;
+  font-size: .76em;
+  padding-top: .18em;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ln > .src {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+/* The call tree reuses the line rhythm but has no numbers. */
+.treelines .ln { grid-template-columns: minmax(0, 1fr); }
+.treelines .ln > .src { padding: .02rem 0; }
+
+.gloss .gloss {
+  margin: .25rem 0 .3rem .95rem;
+  padding: .45rem 0 .5rem;
+  border-left: 2px solid var(--rubric);
+  background: var(--leaf-sunk);
+  border-radius: 0 3px 3px 0;
+}
+.gloss .gloss > .glosshead {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  padding: 0 .95rem .25rem;
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--ink-faint);
+}
+.gloss .gloss > .glosshead .sig {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gloss .gloss > .glosshead .close {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--rubric);
+  font-size: .75rem;
+  padding: 0 .3rem;
+}
+.gloss .gloss > .glosshead .open-full {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  font-size: .75rem;
+}
+.gloss .gloss > .glosshead .open-full:hover { color: var(--rubric); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .gloss .gloss { animation: unfurl 150ms cubic-bezier(.2, .7, .3, 1); }
+  @keyframes unfurl {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
+/* ---------------------------- syntax ---------------------------- */
+
+.t-comment { color: var(--ink-faint); font-style: italic; }
+.t-string  { color: var(--moss); }
+.t-number  { color: var(--amber); }
+.t-keyword { color: var(--rubric); }
+.t-type    { color: var(--woad); }
+.t-macro   { color: var(--amber); }
+.t-pp      { color: var(--ink-soft); }
+.t-punct, .t-ident, .t-plain { color: inherit; }
+
+/* A reference the reader can open. Underline marks it as expandable; the
+   rubric mark appears once it is open, the way a scribe marks a gloss. */
+.ref {
+  font: inherit;
+  color: var(--woad);
+  padding: 0;
+  border-bottom: 1px dotted currentColor;
+  border-radius: 0;
+}
+.ref:hover { color: var(--rubric); border-bottom-style: solid; }
+.ref[aria-expanded="true"] {
+  color: var(--rubric);
+  border-bottom-style: solid;
+  font-weight: 600;
+}
+.ref[aria-expanded="true"]::after {
+  content: "¶";
+  font-weight: 400;
+  margin-left: .12em;
+}
+.ref.unresolved {
+  color: var(--ink-faint);
+  border-bottom: 1px dotted var(--ink-faint);
+  cursor: help;
+}
+.ref.indirect {
+  color: var(--ink-soft);
+  border-bottom: 1px dashed var(--ink-soft);
+  cursor: help;
+}
+
+/* ---------------------------- reading order ---------------------------- */
+
+.prose { max-width: 68ch; }
+.prose h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .4rem; }
+.prose p { color: var(--ink-soft); margin: 0 0 1rem; font-size: .95rem; }
+
+ol.order {
+  max-width: var(--measure);
+  list-style: none;
+  counter-reset: step;
+  margin: 1.1rem 0 0;
+  padding: 0;
+}
+ol.order > li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  gap: .7rem;
+  padding: .2rem 0;
+  border-top: 1px solid var(--rule-soft);
+}
+ol.order > li::before {
+  content: counter(step);
+  font-family: var(--mono);
+  font-size: .74rem;
+  color: var(--ink-faint);
+  text-align: right;
+  padding-top: .22rem;
+}
+ol.order .entry { min-width: 0; display: flex; align-items: baseline; gap: .55rem; flex-wrap: wrap; }
+ol.order .entry > button {
+  font-family: var(--mono);
+  font-size: .82rem;
+  color: var(--ink);
+  text-align: left;
+}
+ol.order .entry > button:hover { color: var(--rubric); }
+ol.order .k { font-size: .74rem; color: var(--rubric); }
+ol.order .f { font-size: .74rem; color: var(--ink-faint); font-family: var(--mono); margin-left: auto; }
+ol.order li.in-cycle { background: var(--rubric-wash); }
+ol.order .cyclenote {
+  grid-column: 2;
+  font-size: .8rem;
+  color: var(--rubric);
+  margin: 0 0 .25rem;
+}
+
+/* ---------------------------- health ---------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0;
+  max-width: var(--measure);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--leaf);
+}
+.grid .cell {
+  padding: .6rem .8rem;
+  border-right: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.grid .cell .n {
+  font-family: var(--mono);
+  font-size: 1.22rem;
+  display: block;
+  color: var(--ink);
+}
+.grid .cell .l { font-size: .8rem; color: var(--ink-soft); }
+
+table.tbl {
+  width: 100%;
+  max-width: var(--measure);
+  border-collapse: collapse;
+  font-size: .82rem;
+  margin-top: .6rem;
+}
+table.tbl th, table.tbl td {
+  text-align: left;
+  padding: .3rem .55rem;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+table.tbl th { color: var(--ink-soft); font-weight: 600; }
+table.tbl td.m, table.tbl th.m { font-family: var(--mono); font-size: .78rem; }
+table.tbl td.num { text-align: right; font-family: var(--mono); }
+
+/* ---------------------------- overlays ---------------------------- */
+
+.marginal {
+  position: fixed;
+  z-index: 60;
+  max-width: 46ch;
+  background: var(--leaf);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--woad);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 12px 34px -14px rgba(0, 0, 0, .4);
+  padding: .5rem .7rem;
+  font-size: .8rem;
+}
+.marginal[hidden] { display: none; }
+.marginal .mhead {
+  font-family: var(--mono);
+  font-size: .76rem;
+  color: var(--ink-faint);
+  margin-bottom: .25rem;
+}
+.marginal pre {
+  font-family: var(--mono);
+  font-size: .76rem;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  tab-size: 4;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  font-size: .95rem;
+  color: var(--ink-soft);
+}
+.scrim[hidden] { display: none; }
+
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  border: 3px dashed var(--rubric);
+  color: var(--rubric);
+  font-size: 1.1rem;
+}
+.dropzone[hidden] { display: none; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.4rem;
+  transform: translateX(-50%);
+  z-index: 70;
+  background: var(--ink);
+  color: var(--leaf);
+  font-size: .84rem;
+  padding: .45rem .8rem;
+  border-radius: 3px;
+  max-width: 72ch;
+}
+.toast[hidden] { display: none; }
+
+/* ---------------------------- responsive ---------------------------- */
+
+@media (max-width: 62rem) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    max-height: 38vh;
+  }
+  .tagline { display: none; }
+  .viewbar .hint { display: none; }
+  .page { padding: 1rem .7rem 5rem; }
+  .ln { padding: 0 .55rem; grid-template-columns: 2.6em minmax(0, 1fr); gap: .5em; }
+  .gloss .gloss { margin-left: .5rem; }
+  .leafhead .acts { margin-left: 0; flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1 class="wordmark"><span class="mark" aria-hidden="true">¶</span>lectern</h1>
+  <p class="tagline" id="tagline">Reading <strong>jsonfmt</strong> — click any underlined call to set its definition into the text.</p>
+  <div class="search-wrap">
+    <input id="search" type="search" placeholder="search symbols" autocomplete="off"
+           spellcheck="false" aria-label="Search symbols" role="combobox"
+           aria-expanded="false" aria-controls="results">
+    <div class="results" id="results" role="listbox" hidden></div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Contents">
+    <section>
+      <h2>Your codebase</h2>
+      <button class="loadbtn" id="pick-folder">Open a folder of C source</button>
+      <button class="loadbtn" id="pick-files">Open individual files</button>
+      <p class="privacy">Indexed in this tab. Nothing is uploaded, and there is no
+        server to upload it to.</p>
+      <input id="file-folder" type="file" webkitdirectory directory multiple hidden>
+      <input id="file-plain" type="file" multiple accept=".c,.h,.cc,.cpp,.cxx,.hpp,.hh,.hxx,.inl,.ipp" hidden>
+    </section>
+
+    <section>
+      <h2 id="contents-head">Contents</h2>
+      <ul class="filelist" id="filelist"></ul>
+    </section>
+
+    <section id="callers-section">
+      <h2>Called by</h2>
+      <ul class="callers" id="callers"></ul>
+    </section>
+  </nav>
+
+  <main class="main" id="main">
+    <div class="viewbar" role="tablist" aria-label="Views">
+      <button class="tab" role="tab" data-view="read" aria-selected="true">Read</button>
+      <button class="tab" role="tab" data-view="tree" aria-selected="false">Call tree</button>
+      <button class="tab" role="tab" data-view="order" aria-selected="false">Reading order</button>
+      <button class="tab" role="tab" data-view="health" aria-selected="false">Index</button>
+      <span class="spacer"></span>
+      <span class="hint"><kbd>/</kbd> search · <kbd>Esc</kbd> back</span>
+    </div>
+
+    <div class="page">
+      <div class="view" id="view-read"></div>
+      <div class="view" id="view-tree" hidden></div>
+      <div class="view" id="view-order" hidden></div>
+      <div class="view" id="view-health" hidden></div>
+    </div>
+  </main>
+</div>
+
+<div class="marginal" id="marginal" hidden></div>
+<div class="scrim" id="scrim" hidden>Reading…</div>
+<div class="dropzone" id="dropzone" hidden>Drop C sources to read them</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="core.js"></script>
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

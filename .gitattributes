@@ -1,0 +1,3 @@
+# demo-data.js is generated from demo/*.c and compared byte for byte against it
+# in CI, so every text file here must be stored and checked out with LF.
+* text=auto eol=lf
