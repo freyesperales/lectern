@@ -130,9 +130,11 @@ test('a continued directive stays marked as preprocessor across lines', () => {
 });
 
 test('line numbers survive a continuation inside a string literal', () => {
-  /* Four physical lines: the backslash-newline inside the literal is one. */
+  /* Five physical lines, the last empty. The backslash-newline inside the
+   * string literal is a real line break and must be counted as one. */
   const src = 'int a;\nchar *s = "x\\\ny";\nint b;\n';
-  assert.strictEqual(src.split('\n').length - 1, 3, 'three newlines in the fixture');
+  assert.deepStrictEqual(src.split('\n'),
+    ['int a;', 'char *s = "x\\', 'y";', 'int b;', '']);
   const t = L.tokenize(src).tokens;
   const b = t.filter((x) => x.k === 'ident').pop();
   assert.strictEqual(b.v, 'b');
