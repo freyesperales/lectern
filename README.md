@@ -62,7 +62,7 @@ cd lectern
 open index.html          # or xdg-open / start, or just double-click it
 ```
 
-That is the whole install. It opens already reading a bundled 800-line C program
+That is the whole install. It opens already reading a bundled ~950-line C program
 with one call expanded, so you can see what it does before deciding whether you
 care.
 
@@ -201,7 +201,7 @@ one you know to double-check.
 
 ## Tests
 
-128 tests, `node --test`, no dependencies:
+131 tests, `node --test`, no dependencies:
 
 ```sh
 node --test test/*.test.js        # or: make test
@@ -237,8 +237,8 @@ index.html        the app: markup and all styling
 app.js            UI — turns an index into DOM, handles input
 core.js           the engine: tokenizer, indexer, resolver, graph. No DOM.
 demo-data.js      generated: demo/ embedded, so file:// needs no fetch
-demo/             a real 800-line C program (arena allocator + JSON parser)
-test/             128 tests, node --test
+demo/             a real ~950-line C program (arena allocator + JSON parser)
+test/             131 tests, node --test
 tools/            demo bundler, optional static server
 ```
 

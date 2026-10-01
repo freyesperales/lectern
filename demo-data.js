@@ -4,7 +4,7 @@
  *
  * Each source is embedded with String.raw so the C text appears verbatim, with
  * no escaping to get wrong. The generator refuses to run if any source contains
- * a backtick or `${`, which are the only two sequences that would break it.
+ * a backtick or ${, which are the only two sequences that would break it.
  */
 (function (root) {
   'use strict';
