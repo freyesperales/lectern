@@ -17,6 +17,18 @@ jobs:
           node-version: '22'
 
       # No install step: lectern has no dependencies.
+      # app.js only runs in a browser, so it has no unit tests. A syntax check
+      # at least guarantees the page cannot fail to parse.
+      - name: Parse-check every shipped script
+        run: node --check core.js && node --check app.js && node --check demo-data.js
+
+      - name: Every script index.html loads must exist
+        run: |
+          grep -o 'src="[^"]*\.js"' index.html | sed 's/src="//;s/"//' | while read -r f; do
+            test -f "$f" || { echo "index.html loads missing file: $f"; exit 1; }
+            echo "ok: $f"
+          done
+
       - name: Run the test suite
         run: node --test test/*.test.js
 

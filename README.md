@@ -267,6 +267,11 @@ $ printf '{"bad":}' | ./jsonfmt
 CI also regenerates `demo-data.js` and fails if it differs from the committed
 copy, so the embedded demo can never drift from the sources in `demo/`.
 
+What the tests do **not** cover: `app.js` only runs in a browser, so the DOM
+layer has no unit tests — CI parse-checks it and verifies that every script
+`index.html` loads exists, and the rest is manual. If you hit a rendering bug,
+that is why.
+
 ## Repository
 
 ```

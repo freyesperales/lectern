@@ -467,8 +467,10 @@
     expandAll.textContent = 'Open every call here';
     expandAll.addEventListener('click', function () {
       var opened = 0;
+      /* Direct lines of this symbol only -- not lines belonging to glosses the
+       * reader has already opened inside it. */
       Array.prototype.forEach.call(
-        rootGloss.querySelectorAll(':scope > .lines .ref[data-rel="call"]'),
+        rootGloss.querySelectorAll(':scope > .lines > .ln .ref[data-rel="call"]'),
         function (b) {
           if (b.getAttribute('aria-expanded') !== 'true' && b.dataset.targets) {
             b.click();
