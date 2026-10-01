@@ -13,7 +13,7 @@
     "demo-data.js"
   ],
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "bundle": "node tools/bundle-demo.js",
     "serve": "node tools/serve.js"
   },

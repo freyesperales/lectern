@@ -18,7 +18,7 @@ jobs:
 
       # No install step: lectern has no dependencies.
       - name: Run the test suite
-        run: node --test test/
+        run: node --test test/*.test.js
 
       - name: Check the committed demo bundle is in sync with demo/
         run: |

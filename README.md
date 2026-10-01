@@ -204,7 +204,7 @@ one you know to double-check.
 128 tests, `node --test`, no dependencies:
 
 ```sh
-node --test test/            # or: make test
+node --test test/*.test.js        # or: make test
 ```
 
 They cover the lexer against a round-trip property (joining every token must

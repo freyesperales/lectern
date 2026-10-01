@@ -17,7 +17,7 @@ run:
 	else echo "Open index.html in your browser."; fi
 
 test:
-	node --test test/
+	node --test test/*.test.js
 
 serve:
 	node tools/serve.js
