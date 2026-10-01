@@ -201,10 +201,19 @@ one you know to double-check.
 
 ## Tests
 
+[![tests](https://github.com/freyesperales/lectern/actions/workflows/test.yml/badge.svg)](https://github.com/freyesperales/lectern/actions/workflows/test.yml)
+
 131 tests, `node --test`, no dependencies:
 
 ```sh
 node --test test/*.test.js        # or: make test
+```
+
+```
+# tests 131
+# suites 0
+# pass 131
+# fail 0
 ```
 
 They cover the lexer against a round-trip property (joining every token must
@@ -224,11 +233,39 @@ and `parse_object` are found as one mutually recursive component; that
 resolves into `arena.c` from both translation units; that `malloc` and `memcpy`
 are reported unresolved while nothing defined in the project ever is.
 
-The demo codebase is a working program, not a fixture dressed up as one:
+The demo codebase is a working program, not a fixture dressed up as one. CI
+compiles it with `-Wall -Wextra -Werror` and round-trips JSON through it on every
+push:
 
 ```sh
-make demo      # compiles demo/*.c with -Wall -Wextra and round-trips JSON
+make demo
 ```
+
+```
+$ cc -std=c11 -Wall -Wextra -Werror -O2 -o jsonfmt demo/arena.c demo/json.c demo/main.c
+$ echo '{"name":"lectern","tags":["c","reading"],"n":[1,2.5,-3e2],"ok":true,"nil":null}' | ./jsonfmt
+{
+  "name": "lectern",
+  "tags": [
+    "c",
+    "reading"
+  ],
+  "n": [
+    1,
+    2.5,
+    -300
+  ],
+  "ok": true,
+  "nil": null
+}
+object: 66624 bytes in 2 arena blocks
+
+$ printf '{"bad":}' | ./jsonfmt
+<stdin>:1:8: expected a value
+```
+
+CI also regenerates `demo-data.js` and fails if it differs from the committed
+copy, so the embedded demo can never drift from the sources in `demo/`.
 
 ## Repository
 
