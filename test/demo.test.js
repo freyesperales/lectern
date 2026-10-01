@@ -209,7 +209,9 @@ test('the statistics are self-consistent', () => {
   assert.strictEqual(s.files, 5);
   assert.ok(s.lines > 700, 'the demo is a few hundred lines, got ' + s.lines);
   assert.ok(s.functions >= 30, 'got ' + s.functions);
-  assert.ok(s.edges > 100, 'got ' + s.edges);
+  /* A sanity floor, not a measurement: the demo wires together an allocator, a
+   * parser and a printer, so a graph this small would mean resolution broke. */
+  assert.ok(s.edges > 120, 'got ' + s.edges);
   assert.strictEqual(s.cycles, project.readingOrder.cycles.length);
   assert.strictEqual(s.backEdges, project.readingOrder.backEdges.length);
   const counted = s.functions + s.prototypes + s.structs + s.unions + s.enums +

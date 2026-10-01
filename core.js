@@ -433,27 +433,26 @@
       if (t.k === 'hash') {
         var dir = sig[p + 1];
         var lineNo = t.line;
+        var dirEnd = endOfDirective(sig, p);
         if (dir && (dir.k === 'ident' || dir.k === 'keyword')) {
-          if (dir.v === 'define' && sig[p + 2] && sig[p + 2].k !== 'hash') {
+          if (dir.v === 'define' && p + 2 < dirEnd) {
             var nameTok = sig[p + 2];
             /* function-like iff `(` is glued to the name with no space */
-            var after = sig[p + 3];
+            var after = p + 3 < dirEnd ? sig[p + 3] : null;
             var funcLike = !!(after && after.v === '(' &&
               after.i === nameTok.i + nameTok.v.length);
-            var endP = p + 2;
-            while (endP + 1 < sig.length && sig[endP + 1].pp) endP++;
+            var lastP = dirEnd - 1;
             symbols.push({
               kind: 'macro', name: nameTok.v, file: path, line: lineNo,
               static: false, funcLike: funcLike,
-              signature: sliceText(src, tokens, sigToFull[p], sigToFull[Math.min(endP, sig.length - 1)])
+              signature: sliceText(src, tokens, sigToFull[p], sigToFull[lastP])
                 .split('\n')[0].trim(),
-              start: sigToFull[p], end: sigToFull[endP],
+              start: sigToFull[p], end: sigToFull[lastP],
               bodyStart: -1, bodyEnd: -1, doc: docFor(sigToFull[p])
             });
           } else if (dir.v === 'include') {
             var parts = [];
-            var q = p + 2;
-            while (q < sig.length && sig[q].pp) { parts.push(sig[q].v); q++; }
+            for (var q = p + 2; q < dirEnd; q++) parts.push(sig[q].v);
             var raw = parts.join('');
             var m = /^<(.+)>$/.exec(raw) || /^"(.+)"$/.exec(raw);
             includes.push({
@@ -463,8 +462,7 @@
             });
           }
         }
-        /* Skip the rest of the directive. */
-        while (p < sig.length && sig[p].pp) p++;
+        p = dirEnd;
         continue;
       }
 
@@ -478,7 +476,7 @@
         var u = sig[q2];
         if (u.k === 'hash') {
           /* A directive inside a declaration (common with #ifdef); skip it. */
-          while (q2 < sig.length && sig[q2].pp) q2++;
+          q2 = endOfDirective(sig, q2);
           continue;
         }
         if (u.k === 'punct') {
@@ -686,6 +684,22 @@
     };
   }
 
+  /**
+   * Index just past the directive that starts at `hashIdx`.
+   *
+   * Dropping trivia makes consecutive directives an unbroken run of `pp`
+   * tokens -- the newline that separated them is gone -- so a run of
+   * `#define`s would otherwise read as one directive. The next directive
+   * always opens with its own `hash` token (a `#` is only lexed as `hash` at
+   * the start of a logical line, so the `#` and `##` macro operators are
+   * ordinary punctuation and do not end anything), which is the boundary.
+   */
+  function endOfDirective(sig, hashIdx) {
+    var i = hashIdx + 1;
+    while (i < sig.length && sig[i].pp && sig[i].k !== 'hash') i++;
+    return i;
+  }
+
   function matchDelimSig(sig, from, open, close) {
     var depth = 0;
     for (var i = from; i < sig.length; i++) {
@@ -837,7 +851,10 @@
         if (sym.kind !== 'function' || !sym.definition) return;
         if (sym.bodyStart < 0) return;
 
-        var fromSig = fullToSig.get(sym.bodyStart);
+        /* Scan from the start of the declaration, not the opening brace: the
+         * types in the parameter list and return type are exactly the ones a
+         * reader wants to look up, and the reading surface renders them. */
+        var fromSig = fullToSig.get(sym.start);
         var toSig = fullToSig.get(sym.bodyEnd);
         if (fromSig === undefined || toSig === undefined) return;
 
@@ -853,6 +870,9 @@
           /* ---- calls: ident immediately followed by `(` ---- */
           if (next && next.k === 'punct' && next.v === '(' && !NOT_CALLABLE.has(t.v)) {
             if (t.k === 'keyword') continue;
+            /* The function's own name in its own signature is the declarator,
+             * not a recursive call. */
+            if (t.v === sym.name && rec.sigToFull[i] < sym.bodyStart) continue;
             if (memberAccess) {
               sym.refs.push({
                 name: t.v, relation: 'indirect-call', tokenFull: rec.sigToFull[i],
@@ -1237,7 +1257,7 @@
     if (!needle) return 0;
     var nq = needle.toLowerCase();
     var hs = haystack.toLowerCase();
-    var hi = 0, score = 0, streak = 0, firstHit = -1;
+    var hi = 0, score = 0, streak = 0, firstHit = -1, prevFound = -2;
     for (var qi = 0; qi < nq.length; qi++) {
       var ch = nq[qi];
       var found = -1;
@@ -1252,8 +1272,11 @@
          haystack[found] >= 'A' && haystack[found] <= 'Z');
       score += 10;
       if (boundary) score += 12;
-      streak = (found === hi && qi > 0) ? streak + 1 : 0;
+      /* Reward letters that landed adjacent to the previous one, so `prsval`
+       * ranks parse_value above a name the same letters are scattered through. */
+      streak = found === prevFound + 1 ? streak + 1 : 0;
       score += streak * 6;
+      prevFound = found;
       hi = found + 1;
     }
     score -= firstHit * 2;

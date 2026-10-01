@@ -127,12 +127,41 @@ test('control-flow keywords followed by a paren are not calls', () => {
   assert.deepStrictEqual(refsOf(p, 'go').map((r) => r.name), []);
 });
 
-test('a local function-pointer declaration inside a body is not a call', () => {
+test('a local function-pointer declaration is not a call, and the call through it is not misattributed', () => {
   const p = project([{ path: 'a.c', text:
     'int target(void) { return 1; }\n' +
     'int go(void) { int (*fp)(void) = target; return fp(); }\n' }]);
   const calls = refsOf(p, 'go').filter((r) => r.relation === 'call');
-  assert.deepStrictEqual(calls.map((r) => r.name), []);
+
+  /* The declarator `(*fp)(void)` is not a call site at all. */
+  assert.strictEqual(calls.filter((r) => r.name === 'fp').length, 1,
+    'only the `fp()` invocation counts, not the declaration');
+
+  /* `fp()` really is a call, but lectern cannot know what fp points at, so it
+   * must be left unresolved rather than linked to `target`. */
+  const fp = calls.find((r) => r.name === 'fp');
+  assert.deepStrictEqual(fp.targets, []);
+  assert.ok(p.unresolved.some((u) => u.name === 'fp'));
+  const target = symbol(p, 'target');
+  assert.ok(!p.out[symbol(p, 'go').id].includes(target.id),
+    'go must not be recorded as calling target');
+});
+
+test("a function's own name in its signature is not a recursive call", () => {
+  const p = project([{ path: 'a.c', text:
+    'int go(int n) { return n; }\n' }]);
+  assert.deepStrictEqual(refsOf(p, 'go').filter((r) => r.name === 'go'), []);
+});
+
+test('types in the parameter list and return type are resolved', () => {
+  const p = project([{ path: 'a.c', text:
+    'struct in { int a; };\nstruct out { int b; };\n' +
+    'struct out *convert(struct in *src) { return 0; }\n' }]);
+  const names = refsOf(p, 'convert')
+    .filter((r) => r.relation === 'type')
+    .map((r) => r.name);
+  assert.ok(names.includes('in'), names.join(' '));
+  assert.ok(names.includes('out'), names.join(' '));
 });
 
 test('a type reference resolves to the aggregate that defines it', () => {

@@ -103,14 +103,17 @@ test('callees are read before their callers', () => {
 });
 
 test('order is independent of the order the source happens to be written in', () => {
-  const { names } = order([{ path: 'a.c', text:
+  /* The forward declarations are indexed too, and appear in the sequence as
+   * prototypes, so positions are taken from the definitions by id rather than
+   * by first occurrence of the name. */
+  const { p, pos, names } = order([{ path: 'a.c', text:
     'void top(void);\nvoid middle(void);\n' +
     'void top(void) { middle(); }\n' +
     'void middle(void) { leaf2(); }\n' +
     'void leaf2(void) { }\n' }]);
-  const pos = (n) => names.indexOf(n);
-  assert.ok(pos('leaf2') < pos('middle'), names.join(' '));
-  assert.ok(pos('middle') < pos('top'), names.join(' '));
+  const at = (n) => pos.get(p.symbols.find((s) => s.name === n && s.definition).id);
+  assert.ok(at('leaf2') < at('middle'), names.join(' '));
+  assert.ok(at('middle') < at('top'), names.join(' '));
 });
 
 test('a type is read before the function that uses it', () => {

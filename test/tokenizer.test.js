@@ -129,12 +129,30 @@ test('a continued directive stays marked as preprocessor across lines', () => {
   assert.ok(!xTok.pp, 'the line after the directive is ordinary code');
 });
 
-test('line numbers survive escapes and continuations', () => {
+test('line numbers survive a continuation inside a string literal', () => {
+  /* Four physical lines: the backslash-newline inside the literal is one. */
   const src = 'int a;\nchar *s = "x\\\ny";\nint b;\n';
+  assert.strictEqual(src.split('\n').length - 1, 3, 'three newlines in the fixture');
   const t = L.tokenize(src).tokens;
   const b = t.filter((x) => x.k === 'ident').pop();
   assert.strictEqual(b.v, 'b');
-  assert.strictEqual(b.line, 3);
+  assert.strictEqual(b.line, 4);
+});
+
+test('token offsets point at the start of the token, not the end', () => {
+  const src = 'int  add(void);';
+  const t = L.tokenize(src).tokens;
+  t.forEach((tok) => {
+    assert.strictEqual(src.slice(tok.i, tok.i + tok.v.length), tok.v,
+      'token ' + JSON.stringify(tok.v) + ' at offset ' + tok.i);
+  });
+  /* And the offsets tile the input with no gaps. */
+  let cursor = 0;
+  t.forEach((tok) => {
+    assert.strictEqual(tok.i, cursor);
+    cursor += tok.v.length;
+  });
+  assert.strictEqual(cursor, src.length);
 });
 
 test('matchDelim finds the balanced partner', () => {
